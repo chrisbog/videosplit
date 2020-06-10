@@ -1,5 +1,18 @@
 import sys
 import os
+import datetime
+import subprocess
+
+def time_parse(text):
+    for fmt in ("%S", "%M:%S", "%H:%M:%S"):
+        try:
+            return datetime.datetime.strptime(text, fmt)
+        except ValueError:
+            pass
+    return (-1)
+
+
+
 
 
 print ("Video Split")
@@ -47,21 +60,40 @@ for line in file_object:
 
     else:
         if len(words) >=3:
-            output_filename=words[2]+"."+extension
+            output_filename=f"{words[2]}.{extension}"
         else:
-            output_filename=filename+"-part-"+str(counter)+"."+extension
+            output_filename=f"{filename}-part-{str(counter)}.{extension}"
             counter += 1
         print ("----------------------------------")
-        print ("Splitting "+fn+" between: "+words[0]+" and "+words[1]+" into "+output_filename)
+        print (f"Splitting {fn} between: {words[0]} and {words[1]} into {output_filename}")
 
+        # parse the time frames to determine the number of seconds between both times
+        # using the seconds value is better in the ffmpeg command
+        begtime = time_parse(words[0])
+        endtime = time_parse(words[1])
+        if begtime == -1 or endtime == -1:
+            print (f"WARNING: Ignoring '{cleaned}', contains an invalid timestamp")
+        else:
+            diff = (endtime-begtime).total_seconds()
 
-        command="ffmpeg -loglevel warning -i "+ fn+" -vcodec copy -acodec copy -ss "+words[0]+" -to "+words[1]+" "+output_filename
-        print("'"+command+"'")
+            print(f"{endtime} - {begtime} = {diff}")
 
-        # Execute the command
+            # This is the original command line
+            #command="ffmpeg -loglevel warning -i "+ fn+" -vcodec copy -acodec copy -ss "+words[0]+" -to "+words[1]+" "+output_filename
 
-        os.system(command)
+            # This is the updated command that removes the black screen at the begining of the split files
+            # The only way to solve it is to use the -ss before the -i and then the -t to specify the seconds of the copy
+            command=f"ffmpeg -loglevel warning -ss {words[0]} -i {fn} -t {diff} -vcodec copy -acodec copy {output_filename}"
 
+            print(f"'{command}'")
+
+            # Execute the command
+
+#            os.system(command)
+            try:
+                subprocess.run(command,shell=True,check=True)
+            except subprocess.CalledProcessError as e:
+                print("Error: " + str(e))
 
 # Close the file
 file_object.close()
